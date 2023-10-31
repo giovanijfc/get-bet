@@ -1,0 +1,7 @@
+build
+node_modules
+
+eng.traineddata
+por.traineddata
+
+assets/generated-sources
