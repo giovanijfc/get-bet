@@ -9,6 +9,7 @@ export interface CrashGame {
   statusBet: "stand-by" | "waiting-for-bet" | "gain" | "loss";
   status: BlazeApiCrashStatus;
   params: {
+    ENABLED_BET: boolean;
     INITIAL_VALUE: number;
     RATE_INCREASE: number;
     RATE_MULTIPLIER_GAIN: number;

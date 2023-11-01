@@ -29,15 +29,48 @@ export const defaultCrashStrategy = async (page: Page) => {
     ).fill(0),
   };
 
-  crashCtx.onChangeGame = (game) => {
+  crashCtx.onChangeGame = async (game) => {
     switch (game.status) {
       case "waiting":
         crashCtx.printarRelatorio();
 
         if (game.statusBet === "stand-by") {
+          const betValue = parseFloat(
+            String(Math.ceil(stats.currentBetValue * 100) / 100)
+          ).toFixed(2);
+
           console.log("============================");
-          console.log("FAZENDO APOSTAS...");
+          console.log("FAZENDO APOSTAS... VALOR: " + betValue);
           console.log("============================");
+
+          const inputBetValueSelector = 'input[type="number"].input-field';
+          const inputBetValue = await page.$(inputBetValueSelector);
+
+          if (inputBetValue) {
+            await inputBetValue.click({ clickCount: 3 }); // Seleciona o texto
+            await inputBetValue.press("Backspace");
+            await inputBetValue.type(betValue, { delay: 100 });
+          }
+
+          const inputAutoRemoveSelector = 'input[data-testid="auto-cashout"]';
+          const inputAutoRemove = await page.$(inputAutoRemoveSelector);
+
+          if (inputAutoRemove) {
+            await inputAutoRemove.click({ clickCount: 3 }); // Seleciona o texto
+            await inputAutoRemove.press("Backspace");
+            await inputAutoRemove.type(
+              env.DEFAULT_CRASH_PARAMS.RATE_MULTIPLIER_GAIN.toString(),
+              { delay: 70 }
+            );
+          }
+
+          if (env.DEFAULT_CRASH_PARAMS.ENABLED_BET) {
+            const placeButtonSelect =
+              "#crash-controller > div.body > div.regular-betting-controller > div.place-bet > button";
+            const placeButton = await page.$(placeButtonSelect);
+
+            if (placeButton) await placeButton.click();
+          }
 
           crashCtx.updateLastGame({ statusBet: "waiting-for-bet" }, false);
         }
@@ -117,8 +150,12 @@ export const defaultCrashStrategy = async (page: Page) => {
     console.table(formattedCountSequencesLosses);
     console.log("");
 
-    if (game.status === "complete" && game.pointResult === undefined) {
-      throw new Error("POINT_RESULT cannot not be fined");
+    if (
+      game.status === "complete" &&
+      game.statusBet === "waiting-for-bet" &&
+      game.pointResult === undefined
+    ) {
+      throw new Error("POINT_RESULT cannot not be undefined");
     }
   };
 };

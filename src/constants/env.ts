@@ -8,7 +8,8 @@ export const env = {
   LOGIN_PASSWORD: "Biladi123@",
 
   DEFAULT_CRASH_PARAMS: {
-    INITIAL_VALUE: 0.01,
+    ENABLED_BET: false,
+    INITIAL_VALUE: 0.1,
     RATE_INCREASE: 1.4,
     RATE_MULTIPLIER_GAIN: 4,
     RETRY_WHEN_LOSS_LIMIT: 30,
