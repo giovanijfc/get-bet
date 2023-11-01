@@ -24,6 +24,9 @@ export const defaultCrashStrategy = async (page: Page) => {
     consecutivesWins: 0,
     accumulatedLossValue: 0,
     currentBetValue: env.DEFAULT_CRASH_PARAMS.INITIAL_VALUE,
+    countSequencesLosses: new Array(
+      env.DEFAULT_CRASH_PARAMS.RETRY_WHEN_LOSS_LIMIT
+    ).fill(0),
   };
 
   crashCtx.onChangeGame = (game) => {
@@ -45,7 +48,9 @@ export const defaultCrashStrategy = async (page: Page) => {
 
         if (game.statusBet === "waiting-for-bet") {
           if (game.params.RATE_MULTIPLIER_GAIN <= game.pointResult) {
+            stats.countSequencesLosses[stats.consecutivesLosses] += 1;
             stats = {
+              ...stats,
               balance:
                 stats.balance +
                 stats.currentBetValue * (game.params.RATE_MULTIPLIER_GAIN - 1),
@@ -57,6 +62,7 @@ export const defaultCrashStrategy = async (page: Page) => {
             crashCtx.updateLastGame({ statusBet: "gain" }, false);
           } else {
             stats = {
+              ...stats,
               balance: stats.balance - stats.currentBetValue,
               accumulatedLossValue:
                 stats.accumulatedLossValue + stats.currentBetValue,
@@ -69,7 +75,7 @@ export const defaultCrashStrategy = async (page: Page) => {
 
             if (
               stats.consecutivesLosses >=
-              env.DEFAULT_CRASH_PARAMS.RETRY_WHEN_LOSS_LIMIT
+              env.DEFAULT_CRASH_PARAMS.RETRY_WHEN_LOSS_LIMIT - 1
             ) {
               throw new Error(
                 `LIMIT RETRY WHEN LOSS attain consecutivesLosses = ${stats.consecutivesLosses}`
@@ -100,6 +106,15 @@ export const defaultCrashStrategy = async (page: Page) => {
       PONTO_MULTIPLICADOR_RESULTADO: currentGame.pointResult,
       TEMPO_DE_SESSAO: formattedTime,
     });
+    console.log("");
+
+    const formattedCountSequencesLosses: { [key: number]: number } = {};
+    stats.countSequencesLosses.forEach((element, index) => {
+      formattedCountSequencesLosses[index] = element;
+    });
+    console.log("");
+    console.log("CONTADOR DE SEQUENCIA DE PERDAS: ");
+    console.table(formattedCountSequencesLosses);
     console.log("");
 
     if (game.status === "complete" && game.pointResult === undefined) {
