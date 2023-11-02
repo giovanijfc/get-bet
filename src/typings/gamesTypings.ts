@@ -10,6 +10,8 @@ export interface CrashGame {
   status: BlazeApiCrashStatus;
   params: {
     ENABLED_BET: boolean;
+    LAST_GAMES: number;
+    MIN_PERCENTAGE_LAST_GAMES: number;
     INITIAL_VALUE: number;
     RATE_INCREASE: number;
     RATE_MULTIPLIER_GAIN: number;

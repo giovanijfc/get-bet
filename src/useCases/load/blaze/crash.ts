@@ -4,9 +4,9 @@ import { CrashContext } from "../../../contexts/blaze/CrashContext";
 import { env } from "../../../constants/env";
 
 /**
- * Maximum items: 299
+ * Minimum = 1
  */
-const HISTORY_LIMIT = 20;
+const NUMBER_OF_PAGES = 1; // 300 register from page
 
 export const loadCrashGames = async (page: Page) => {
   await Promise.all([
@@ -18,31 +18,37 @@ export const loadCrashGames = async (page: Page) => {
   const historyDiv = await page.$("#history");
 
   if (historyDiv) {
-    const bets = await historyDiv.$$("#history > div");
+    for (let currentPage = 0; currentPage < NUMBER_OF_PAGES; currentPage++) {
+      const bets = await historyDiv.$$("#history > div");
 
-    if (bets && bets.length > 0) {
-      const crashCtx = CrashContext.getInstance();
+      if (bets && bets.length > 0) {
+        const crashCtx = CrashContext.getInstance();
 
-      for (const bet of bets.slice(0, HISTORY_LIMIT).reverse()) {
-        const pointResult = (await (
-          await bet.$(".bet-amount")
-        )?.evaluate((el) =>
-          el.textContent ? parseFloat(el.textContent) : 0
-        )) as number;
-        const createdAt = (await (
-          await bet.$("p")
-        )?.evaluate((el) => el.textContent)) as string;
+        for (const bet of bets.reverse()) {
+          const pointResult = (await (
+            await bet.$(".bet-amount")
+          )?.evaluate((el) =>
+            el.textContent ? parseFloat(el.textContent) : 0
+          )) as number;
+          const createdAt = (await (
+            await bet.$("p")
+          )?.evaluate((el) => el.textContent)) as string;
 
-        crashCtx.addGame({
-          providerId: null,
-          point: undefined,
-          pointResult,
-          statusBet: "stand-by",
-          status: "complete",
-          createdAt,
-          updatedAt: undefined,
-          params: env.DEFAULT_CRASH_PARAMS,
-        });
+          crashCtx.addGame({
+            providerId: null,
+            point: undefined,
+            pointResult,
+            statusBet: "stand-by",
+            status: "complete",
+            createdAt,
+            updatedAt: undefined,
+            params: env.DEFAULT_CRASH_PARAMS,
+          });
+        }
+
+        page.click(
+          "#crash-analytics > div.body > div.footer > div > div > button:nth-child(2)"
+        );
       }
     }
   }

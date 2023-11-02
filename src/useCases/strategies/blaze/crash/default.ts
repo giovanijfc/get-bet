@@ -1,7 +1,9 @@
 import { Page } from "puppeteer";
+
 import { CrashContext } from "../../../../contexts/blaze/CrashContext";
 import { env } from "../../../../constants/env";
 import { updateCountHourMinutesSeconds } from "../../../../utils/updateCountHourMinutesSeconds";
+import { clearTerminal } from "../../../../utils/clearTerminal";
 
 export const defaultCrashStrategy = async (page: Page) => {
   const crashCtx = CrashContext.getInstance();
@@ -24,24 +26,33 @@ export const defaultCrashStrategy = async (page: Page) => {
     consecutivesWins: 0,
     accumulatedLossValue: 0,
     currentBetValue: env.DEFAULT_CRASH_PARAMS.INITIAL_VALUE,
-    countSequencesLosses: new Array(
-      env.DEFAULT_CRASH_PARAMS.RETRY_WHEN_LOSS_LIMIT
-    ).fill(0),
+    countSequencesLosses: new Array(0).fill(0),
   };
 
   crashCtx.onChangeGame = async (game) => {
+    clearTerminal();
+
+    const winPercentageLastGames = crashCtx.getWinPercentageLastGames(
+      env.DEFAULT_CRASH_PARAMS.LAST_GAMES,
+      env.DEFAULT_CRASH_PARAMS.RATE_MULTIPLIER_GAIN
+    );
+
     switch (game.status) {
       case "waiting":
-        crashCtx.printarRelatorio();
+        const inBet = stats.consecutivesLosses > 0;
+
+        const isLowRateWin =
+          winPercentageLastGames <
+          env.DEFAULT_CRASH_PARAMS.MIN_PERCENTAGE_LAST_GAMES;
+
+        if (!inBet && isLowRateWin) {
+          break;
+        }
 
         if (game.statusBet === "stand-by") {
           const betValue = parseFloat(
             String(Math.ceil(stats.currentBetValue * 100) / 100)
           ).toFixed(2);
-
-          console.log("============================");
-          console.log("FAZENDO APOSTAS... VALOR: " + betValue);
-          console.log("============================");
 
           const inputBetValueSelector = 'input[type="number"].input-field';
           const inputBetValue = await page.$(inputBetValueSelector);
@@ -49,7 +60,7 @@ export const defaultCrashStrategy = async (page: Page) => {
           if (inputBetValue) {
             await inputBetValue.click({ clickCount: 3 }); // Seleciona o texto
             await inputBetValue.press("Backspace");
-            await inputBetValue.type(betValue, { delay: 100 });
+            await inputBetValue.type(betValue, { delay: 50 });
           }
 
           const inputAutoRemoveSelector = 'input[data-testid="auto-cashout"]';
@@ -60,7 +71,7 @@ export const defaultCrashStrategy = async (page: Page) => {
             await inputAutoRemove.press("Backspace");
             await inputAutoRemove.type(
               env.DEFAULT_CRASH_PARAMS.RATE_MULTIPLIER_GAIN.toString(),
-              { delay: 70 }
+              { delay: 50 }
             );
           }
 
@@ -81,7 +92,12 @@ export const defaultCrashStrategy = async (page: Page) => {
 
         if (game.statusBet === "waiting-for-bet") {
           if (game.params.RATE_MULTIPLIER_GAIN <= game.pointResult) {
+            if (!stats.countSequencesLosses[stats.consecutivesLosses]) {
+              stats.countSequencesLosses[stats.consecutivesLosses] = 0;
+            }
+
             stats.countSequencesLosses[stats.consecutivesLosses] += 1;
+
             stats = {
               ...stats,
               balance:
@@ -119,17 +135,22 @@ export const defaultCrashStrategy = async (page: Page) => {
 
         break;
     }
+    console.log("");
+
+    await crashCtx.printarRelatorio();
 
     const currentGame = crashCtx.getCurrentGame();
     const formattedTime = `${hours.toString().padStart(2, "0")}:${minutes
       .toString()
       .padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
 
-    console.log("");
-    console.log("STATS: ");
+    console.log("STATS_CURRENT_GAME: ");
     console.table({
       SALDO: stats.balance,
-      VALOR_APOSTA_ATUAL: stats.currentBetValue,
+      VALOR_APOSTA_ATUAL:
+        currentGame.statusBet === "waiting-for-bet"
+          ? stats.currentBetValue
+          : "N/A",
       VALOR_DE_PERDA_ACUMULADO_SESSAO: stats.accumulatedLossValue,
       VITORIAS_CONSECUTIVAS: stats.consecutivesWins,
       DERROTAS_CONSECUTIVAS: stats.consecutivesLosses,
@@ -138,6 +159,7 @@ export const defaultCrashStrategy = async (page: Page) => {
       PONTO_MULTIPLICADOR_ALVO: currentGame.point,
       PONTO_MULTIPLICADOR_RESULTADO: currentGame.pointResult,
       TEMPO_DE_SESSAO: formattedTime,
+      PORCENTAGEM_DE_ACERTO_GERAL: winPercentageLastGames,
     });
     console.log("");
 
@@ -145,10 +167,9 @@ export const defaultCrashStrategy = async (page: Page) => {
     stats.countSequencesLosses.forEach((element, index) => {
       formattedCountSequencesLosses[index] = element;
     });
-    console.log("");
+
     console.log("CONTADOR DE SEQUENCIA DE PERDAS: ");
     console.table(formattedCountSequencesLosses);
-    console.log("");
 
     if (
       game.status === "complete" &&

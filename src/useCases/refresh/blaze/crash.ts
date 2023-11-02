@@ -141,7 +141,7 @@ export const refreshGamesWithCanvas = async (page: Page) => {
       crashCtx.setStatus(getStatusFromTextContentCanvas(data.text));
       const lastGame = crashCtx.getCurrentGame();
 
-      switch (crashCtx.getStatus()) {
+      switch (lastGame.status) {
         case "waiting":
           if (lastGame.status !== "waiting")
             crashCtx.addGame({
@@ -179,5 +179,5 @@ export const refreshGamesWithCanvas = async (page: Page) => {
     }
 
     isBusy = false;
-  }, 300);
+  }, 100);
 };

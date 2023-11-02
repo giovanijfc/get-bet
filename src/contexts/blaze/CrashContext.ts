@@ -1,3 +1,4 @@
+import { env } from "../../constants/env";
 import { BlazeApiCrashStatus } from "../../typings/blazeApiResponseTypings";
 import { CrashGame } from "../../typings/gamesTypings";
 
@@ -46,26 +47,48 @@ export class CrashContext {
   }
 
   public printarRelatorio() {
-    console.log("");
-    const totalGames = this.games.length;
-    const totalGamesBets = this.games.filter(
-      (g) => g.statusBet !== "stand-by"
+    return new Promise<void>((res) => {
+      const totalGames = this.games.length;
+
+      const totalGamesBets = this.games.filter(
+        (g) => g.statusBet !== "stand-by"
+      );
+      const gains = totalGamesBets.filter((g) => g.statusBet === "gain").length;
+      const loss = totalGamesBets.filter((g) => g.statusBet === "loss").length;
+
+      const winPercentage =
+        gains > 0 && totalGamesBets.length > 0
+          ? (gains * 100) / totalGamesBets.length
+          : 0;
+
+      console.log("SESSION_STATS");
+      console.table({
+        TOTAL_DE_JOGOS: totalGames,
+        TOTAL_DE_JOGOS_APOSTADOS: totalGamesBets.length,
+        TOTAL_JOGOS_GANHOS: gains,
+        TOTAL_JOGOS_PERDIDOS: loss,
+        PORCENTAGEM_DE_ACERTO: winPercentage,
+      });
+      console.log("");
+      res();
+    });
+  }
+
+  public getWinPercentageLastGames(qty: number, multiplierGain: number) {
+    const indexLast =
+      this.games.length - qty >= 0 ? this.games.length - 300 : 0;
+    const lastIndexgame = this.games.length - 1;
+    const lastGames = this.games.slice(indexLast, lastIndexgame);
+
+    const totalGamesWin = lastGames.filter(
+      (g) => g.pointResult && g.pointResult >= multiplierGain
     ).length;
 
-    const gains = this.games.filter((g) => g.statusBet === "gain").length;
-    const loss = this.games.filter((g) => g.statusBet === "loss").length;
+    const winPercentageLastGames =
+      totalGamesWin > 0 && lastGames.length > 0
+        ? (totalGamesWin * 100) / lastGames.length
+        : 0;
 
-    const winPercentage =
-      gains > 0 && totalGamesBets > 0 ? (gains * 100) / totalGamesBets : 0;
-
-    console.log("++++++++++++++++++++++++++++++++++++++++");
-    console.log("TOTAL DE JOGOS: " + totalGames);
-    console.log("TOTAL DE JOGOS APOSTADOS: " + totalGamesBets);
-    console.log("TOTAL JOGOS GANHOS: ", gains);
-    console.log("TOTAL JOGOS PERDIDOS: ", loss);
-    console.log("PORCENTAGEM DE ACERTO: ", winPercentage);
-    console.log("++++++++++++++++++++++++++++++++++++++++");
-
-    console.log("");
+    return winPercentageLastGames;
   }
 }
