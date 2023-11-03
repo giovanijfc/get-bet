@@ -51,7 +51,10 @@ export class CrashContext {
       const totalGames = this.games.length;
 
       const totalGamesBets = this.games.filter(
-        (g) => g.statusBet !== "stand-by"
+        (g) =>
+          g.statusBet === "gain" ||
+          g.statusBet === "loss" ||
+          g.statusBet === "waiting-for-bet"
       );
       const gains = totalGamesBets.filter((g) => g.statusBet === "gain").length;
       const loss = totalGamesBets.filter((g) => g.statusBet === "loss").length;
@@ -67,28 +70,12 @@ export class CrashContext {
         TOTAL_DE_JOGOS_APOSTADOS: totalGamesBets.length,
         TOTAL_JOGOS_GANHOS: gains,
         TOTAL_JOGOS_PERDIDOS: loss,
-        PORCENTAGEM_DE_ACERTO: winPercentage,
+        PORCENTAGEM_DE_ACERTO: parseFloat(String(winPercentage))
+          .toFixed(2)
+          .concat("%"),
       });
       console.log("");
       res();
     });
-  }
-
-  public getWinPercentageLastGames(qty: number, multiplierGain: number) {
-    const indexLast =
-      this.games.length - qty >= 0 ? this.games.length - 300 : 0;
-    const lastIndexgame = this.games.length - 1;
-    const lastGames = this.games.slice(indexLast, lastIndexgame);
-
-    const totalGamesWin = lastGames.filter(
-      (g) => g.pointResult && g.pointResult >= multiplierGain
-    ).length;
-
-    const winPercentageLastGames =
-      totalGamesWin > 0 && lastGames.length > 0
-        ? (totalGamesWin * 100) / lastGames.length
-        : 0;
-
-    return winPercentageLastGames;
   }
 }

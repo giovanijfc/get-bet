@@ -7,6 +7,8 @@ import { env } from "../../../constants/env";
  * Minimum = 1
  */
 const NUMBER_OF_PAGES = 1; // 300 register from page
+const ITEMS_PER_PAGE = 300;
+const LIMIT_BETS_LOAD = ITEMS_PER_PAGE * NUMBER_OF_PAGES;
 
 export const loadCrashGames = async (page: Page) => {
   await Promise.all([
@@ -24,7 +26,7 @@ export const loadCrashGames = async (page: Page) => {
       if (bets && bets.length > 0) {
         const crashCtx = CrashContext.getInstance();
 
-        for (const bet of bets.reverse()) {
+        for (const bet of bets.slice(0, LIMIT_BETS_LOAD).reverse()) {
           const pointResult = (await (
             await bet.$(".bet-amount")
           )?.evaluate((el) =>

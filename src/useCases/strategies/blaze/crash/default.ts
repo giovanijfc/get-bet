@@ -4,6 +4,7 @@ import { CrashContext } from "../../../../contexts/blaze/CrashContext";
 import { env } from "../../../../constants/env";
 import { updateCountHourMinutesSeconds } from "../../../../utils/updateCountHourMinutesSeconds";
 import { clearTerminal } from "../../../../utils/clearTerminal";
+import { stat } from "fs";
 
 export const defaultCrashStrategy = async (page: Page) => {
   const crashCtx = CrashContext.getInstance();
@@ -21,65 +22,48 @@ export const defaultCrashStrategy = async (page: Page) => {
   }, 1000);
 
   let stats = {
-    balance: 0,
+    profit: 0,
+    maximumLossBalance: 0,
+    accumulatedLossValue: 0,
+    wins: 0,
+    loss: 0,
+    currentBetValue: env.DEFAULT_CRASH_PARAMS.INITIAL_VALUE,
     consecutivesLosses: 0,
     consecutivesWins: 0,
-    accumulatedLossValue: 0,
-    currentBetValue: env.DEFAULT_CRASH_PARAMS.INITIAL_VALUE,
-    countSequencesLosses: new Array(0).fill(0),
+    countSequencesLosses: new Array(),
   };
 
   crashCtx.onChangeGame = async (game) => {
     clearTerminal();
 
-    const winPercentageLastGames = crashCtx.getWinPercentageLastGames(
-      env.DEFAULT_CRASH_PARAMS.LAST_GAMES,
-      env.DEFAULT_CRASH_PARAMS.RATE_MULTIPLIER_GAIN
-    );
-
     switch (game.status) {
       case "waiting":
-        const inBet = stats.consecutivesLosses > 0;
-
-        const isLowRateWin =
-          winPercentageLastGames <
-          env.DEFAULT_CRASH_PARAMS.MIN_PERCENTAGE_LAST_GAMES;
-
-        if (!inBet && isLowRateWin) {
-          break;
-        }
+        await clearInputs(page);
 
         if (game.statusBet === "stand-by") {
           const betValue = parseFloat(
             String(Math.ceil(stats.currentBetValue * 100) / 100)
           ).toFixed(2);
 
-          const inputBetValueSelector = 'input[type="number"].input-field';
-          const inputBetValue = await page.$(inputBetValueSelector);
+          const inputBetValue = await page.$(
+            'input[type="number"].input-field'
+          );
 
-          if (inputBetValue) {
-            await inputBetValue.click({ clickCount: 3 }); // Seleciona o texto
-            await inputBetValue.press("Backspace");
-            await inputBetValue.type(betValue, { delay: 50 });
-          }
+          if (inputBetValue) await inputBetValue.type(betValue, { delay: 50 });
 
-          const inputAutoRemoveSelector = 'input[data-testid="auto-cashout"]';
-          const inputAutoRemove = await page.$(inputAutoRemoveSelector);
-
-          if (inputAutoRemove) {
-            await inputAutoRemove.click({ clickCount: 3 }); // Seleciona o texto
-            await inputAutoRemove.press("Backspace");
-            await inputAutoRemove.type(
+          const inputAutoCashout = await page.$(
+            'input[data-testid="auto-cashout"]'
+          );
+          if (inputAutoCashout)
+            await inputAutoCashout.type(
               env.DEFAULT_CRASH_PARAMS.RATE_MULTIPLIER_GAIN.toString(),
               { delay: 50 }
             );
-          }
 
           if (env.DEFAULT_CRASH_PARAMS.ENABLED_BET) {
-            const placeButtonSelect =
-              "#crash-controller > div.body > div.regular-betting-controller > div.place-bet > button";
-            const placeButton = await page.$(placeButtonSelect);
-
+            const placeButton = await page.$(
+              "#crash-controller > div.body > div.regular-betting-controller > div.place-bet > button"
+            );
             if (placeButton) await placeButton.click();
           }
 
@@ -91,44 +75,45 @@ export const defaultCrashStrategy = async (page: Page) => {
         if (game.pointResult === undefined) break;
 
         if (game.statusBet === "waiting-for-bet") {
-          if (game.params.RATE_MULTIPLIER_GAIN <= game.pointResult) {
-            if (!stats.countSequencesLosses[stats.consecutivesLosses]) {
-              stats.countSequencesLosses[stats.consecutivesLosses] = 0;
+          const isWin = game.params.RATE_MULTIPLIER_GAIN <= game.pointResult;
+
+          const countLossIndex = stats.consecutivesLosses;
+
+          if (isWin) {
+            if (!stats.countSequencesLosses[countLossIndex]) {
+              stats.countSequencesLosses[countLossIndex] = 0;
             }
 
-            stats.countSequencesLosses[stats.consecutivesLosses] += 1;
-
-            stats = {
-              ...stats,
-              balance:
-                stats.balance +
-                stats.currentBetValue * (game.params.RATE_MULTIPLIER_GAIN - 1),
-              accumulatedLossValue: 0,
-              consecutivesLosses: 0,
-              consecutivesWins: stats.consecutivesWins + 1,
-              currentBetValue: env.DEFAULT_CRASH_PARAMS.INITIAL_VALUE,
-            };
+            stats.countSequencesLosses[countLossIndex] += 1;
+            stats["profit"] +=
+              stats.currentBetValue * (game.params.RATE_MULTIPLIER_GAIN - 1);
+            stats["consecutivesWins"] += 1;
+            stats["consecutivesLosses"] = 0;
+            stats["wins"] += 1;
+            stats["currentBetValue"] = env.DEFAULT_CRASH_PARAMS.INITIAL_VALUE;
             crashCtx.updateLastGame({ statusBet: "gain" }, false);
           } else {
-            stats = {
-              ...stats,
-              balance: stats.balance - stats.currentBetValue,
-              accumulatedLossValue:
-                stats.accumulatedLossValue + stats.currentBetValue,
-              consecutivesLosses: stats.consecutivesLosses + 1,
-              consecutivesWins: 0,
-              currentBetValue:
-                stats.currentBetValue * env.DEFAULT_CRASH_PARAMS.RATE_INCREASE,
-            };
+            if (stats["profit"] <= stats["maximumLossBalance"]) {
+              stats["maximumLossBalance"] = stats["profit"];
+            }
+
+            stats["profit"] -= stats.currentBetValue;
+            stats["accumulatedLossValue"] -= stats.currentBetValue;
+            stats["consecutivesLosses"] += 1;
+            stats["consecutivesWins"] = 0;
+            stats["loss"] += 1;
+            stats["currentBetValue"] *= env.DEFAULT_CRASH_PARAMS.RATE_INCREASE;
+
             crashCtx.updateLastGame({ statusBet: "loss" }, false);
 
-            if (
+            const isStop =
               stats.consecutivesLosses >=
-              env.DEFAULT_CRASH_PARAMS.RETRY_WHEN_LOSS_LIMIT - 1
-            ) {
-              throw new Error(
-                `LIMIT RETRY WHEN LOSS attain consecutivesLosses = ${stats.consecutivesLosses}`
-              );
+              env.DEFAULT_CRASH_PARAMS.RETRY_WHEN_LOSS_LIMIT - 1;
+
+            if (isStop) {
+              stats["accumulatedLossValue"] = 0;
+              stats["consecutivesLosses"] = 0;
+              stats["currentBetValue"] = env.DEFAULT_CRASH_PARAMS.INITIAL_VALUE;
             }
           }
         }
@@ -146,20 +131,30 @@ export const defaultCrashStrategy = async (page: Page) => {
 
     console.log("STATS_CURRENT_GAME: ");
     console.table({
-      SALDO: stats.balance,
+      LUCRO: parseFloat(String(Math.ceil(stats.profit * 100) / 100)).toFixed(2),
       VALOR_APOSTA_ATUAL:
         currentGame.statusBet === "waiting-for-bet"
-          ? stats.currentBetValue
+          ? parseFloat(
+              String(Math.ceil(stats.currentBetValue * 100) / 100)
+            ).toFixed(2)
           : "N/A",
-      VALOR_DE_PERDA_ACUMULADO_SESSAO: stats.accumulatedLossValue,
-      VITORIAS_CONSECUTIVAS: stats.consecutivesWins,
-      DERROTAS_CONSECUTIVAS: stats.consecutivesLosses,
+      PERDA_ACUMULADA_TENTATIVA: parseFloat(
+        String(stats.accumulatedLossValue)
+      ).toFixed(2),
       STATUS_GAME: currentGame.status,
       STATUS_DA_APOSTA: currentGame.statusBet,
-      PONTO_MULTIPLICADOR_ALVO: currentGame.point,
-      PONTO_MULTIPLICADOR_RESULTADO: currentGame.pointResult,
+      PONTO_MULTIPLICADOR_RESULTADO: currentGame.pointResult
+        ? parseFloat(String(currentGame.pointResult)).toFixed(2)
+        : 0.0,
+      VITORIAS_CONSECUTIVAS: stats.consecutivesWins,
+      DERROTAS_CONSECUTIVAS: stats.consecutivesLosses,
+      MAXIMO_DE_PERDA: parseFloat(
+        String(Math.ceil(stats.maximumLossBalance * 100) / 100)
+      ).toFixed(2),
+      PONTO_MULTIPLICADOR_ALVO: currentGame.point
+        ? parseFloat(String(currentGame.point)).toFixed(2)
+        : 0.0,
       TEMPO_DE_SESSAO: formattedTime,
-      PORCENTAGEM_DE_ACERTO_GERAL: winPercentageLastGames,
     });
     console.log("");
 
@@ -179,4 +174,22 @@ export const defaultCrashStrategy = async (page: Page) => {
       throw new Error("POINT_RESULT cannot not be undefined");
     }
   };
+};
+
+const clearInputs = async (page: Page) => {
+  const inputBetValueSelector = 'input[type="number"].input-field';
+  const inputBetValue = await page.$(inputBetValueSelector);
+
+  if (inputBetValue) {
+    await inputBetValue.click({ clickCount: 3 }); // Seleciona o texto
+    await inputBetValue.press("Backspace");
+  }
+
+  const inputAutoRemoveSelector = 'input[data-testid="auto-cashout"]';
+  const inputAutoCashout = await page.$(inputAutoRemoveSelector);
+
+  if (inputAutoCashout) {
+    await inputAutoCashout.click({ clickCount: 3 }); // Seleciona o texto
+    await inputAutoCashout.press("Backspace");
+  }
 };

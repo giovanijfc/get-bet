@@ -6,11 +6,15 @@ export interface CrashGame {
   updatedAt: string | undefined;
   point: number | undefined;
   pointResult: number | undefined;
-  statusBet: "stand-by" | "waiting-for-bet" | "gain" | "loss";
+  statusBet:
+    | "stand-by"
+    | "waiting-for-bet"
+    | "low-win-percentage"
+    | "gain"
+    | "loss";
   status: BlazeApiCrashStatus;
   params: {
     ENABLED_BET: boolean;
-    LAST_GAMES: number;
     MIN_PERCENTAGE_LAST_GAMES: number;
     INITIAL_VALUE: number;
     RATE_INCREASE: number;
